@@ -1,0 +1,125 @@
+#!/bin/bash
+# Set Oracle environment variables, PS1 and some aliases
+# Usage: . oenv <db_name>
+# #############################################################################
+# Configuration section help:
+#  ocfg alias:sid:oracle_home[:color]
+#  colors: 1-red, 2-green, 3-yellow, 4-blue, 5-magenta, 6-cyan
+# ########################## Configuration ####################################
+# ocfg ASM:+ASM1:/u01/app/12.1.0.2/grid:5
+# ocfg ORATEST:ORATEST://u02/oracle/oracle_base/ORATEST/12102:1
+# #############################################################################
+
+SCRIPT_NAME=$(readlink -f ${BASH_SOURCE[0]})
+
+while true; do
+    # Check arguments
+    if [ $# -ne 1 ]; then
+        echo "Usage: oenv <DBALIAS>"
+        retcode=1
+        break
+    else
+        dbalias="$1"
+    fi
+
+    # Check configuration section
+    numaliases=$(grep -i "^# ocfg ${dbalias}:" ${SCRIPT_NAME} | wc -l)
+    case ${numaliases} in
+        0) echo "Alias ${dbalias} is not found. Please check the configuration section of the script."
+           retcode=1
+           break
+           ;;
+        1) cfgstring=$(grep -i "^# ocfg ${dbalias}:" ${SCRIPT_NAME} | sed "s|# ocfg ||g")
+           ;;
+        *) echo "Multiple aliases for ${dbalias} found. Please check the configuration section of the script."
+           retcode=1
+           break
+           ;;
+    esac
+
+    # Save old ORACLE_HOME
+    if [ -z ${ORACLE_HOME} ]; then
+        OLD_ORACLE_HOME="xdummyx"
+    else
+        OLD_ORACLE_HOME=${ORACLE_HOME}
+    fi
+    
+    # Set Oracle env variables
+    ORACLE_SID=$(echo ${cfgstring}     | cut -d":" -f2)    ; export ORACLE_SID
+    ORACLE_HOME=$(echo ${cfgstring}    | cut -d":" -f3)    ; export ORACLE_HOME
+
+    unset ORACLE_BASE
+    ORACLE_BASE=$(${ORACLE_HOME}/bin/orabase)              ; export ORACLE_BASE
+
+    # Set PATH
+    case ${PATH} in
+        *${OLD_ORACLE_HOME}*)
+            PATH=$(echo ${PATH} | sed "s|${OLD_ORACLE_HOME}|${ORACLE_HOME}|g")
+            ;;
+        *${ORACLE_HOME}*)
+            ;;
+        *)
+            PATH=${ORACLE_HOME}/bin:${ORACLE_HOME}/OPatch:${PATH}
+            ;;
+    esac
+    
+    export PATH
+    
+    # Set LD_LIBRARY_PATH
+    case ${LD_LIBRARY_PATH} in
+        *${OLD_ORACLE_HOME}/lib*)
+            LD_LIBRARY_PATH=$(echo ${LD_LIBRARY_PATH} | sed "s|${OLD_ORACLE_HOME}/lib|${ORACLE_HOME}/lib|g")
+            ;;
+        *${ORACLE_HOME}/lib*)
+            ;;
+        "")
+            LD_LIBRARY_PATH=${ORACLE_HOME}/lib
+            ;;
+        *)
+            LD_LIBRARY_PATH=${ORACLE_HOME}/lib:${LD_LIBRARY_PATH}
+            ;;
+    esac    
+    
+    export LD_LIBRARY_PATH
+    
+    # Set PS1
+    envcolor=$(echo ${cfgstring} | cut -d":" -f4)
+    
+    case ${envcolor} in
+        [0-9])
+            PS1="[\u@\h:\[$(tput setaf ${envcolor})\]${ORACLE_SID}\[$(tput sgr0)\] \W]\\$ "
+            ;;
+        *)  
+            PS1="[\u@\h:${ORACLE_SID} \W]\\$ "
+            ;;
+    esac
+    
+    # Set NLS_DATE_FORMAT
+    NLS_DATE_FORMAT='DD.MM.YYYY HH24:MI:SS'; export NLS_DATE_FORMAT
+    
+    # Set aliases
+    alias sql='${ORACLE_HOME}/bin/sqlplus / as sysdba'
+    
+    ins_status="$(echo -e "set head off\n set feedback off\n set pages 0\n select status from v\$instance;" | ${ORACLE_HOME}/bin/sqlplus -s / as sysdba)"
+    case ${ins_status} in
+        STARTED|MOUNTED|OPEN)
+            bdump="$(echo -e "set head off\n set feedback off\n set pages 0\n select value from v\$diag_info where name='Diag Trace';" | ${ORACLE_HOME}/bin/sqlplus -s / as sysdba)"
+            alias talert="tail -100f ${bdump}/alert_${ORACLE_SID}.log"
+            alias valert="view ${bdump}/alert_${ORACLE_SID}.log"
+            ;;
+        *)
+            echo "WARNING: Unable to determine alert log location as the instance is down"
+            unalias valert 2>/dev/null
+            unalias talert 2>/dev/null
+            ;;
+    esac
+
+    echo "ORACLE_SID  = ${ORACLE_SID}"
+    echo "ORACLE_HOME = ${ORACLE_HOME}"
+    echo "ORACLE_BASE = ${ORACLE_BASE}"
+
+    break
+done
+
+unset SCRIPT_NAME OLD_ORACLE_HOME bdump ins_status dbalias numaliases cfgstring envcolor
+return ${retcode}
