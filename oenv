@@ -7,7 +7,7 @@
 #  colors: 1-red, 2-green, 3-yellow, 4-blue, 5-magenta, 6-cyan
 # ########################## Configuration ####################################
 # ocfg ASM:+ASM1:/u01/app/12.1.0.2/grid:5
-# ocfg ORATEST:ORATEST://u02/oracle/oracle_base/ORATEST/12102:1
+# ocfg ORATEST:ORATEST:/u02/oracle/oracle_base/ORATEST/12102:1
 # #############################################################################
 
 SCRIPT_NAME=$(readlink -f ${BASH_SOURCE[0]})
