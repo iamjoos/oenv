@@ -25,7 +25,7 @@ while true; do
     # Check configuration section
     numaliases=$(grep -i "^# ocfg ${dbalias}:" ${SCRIPT_NAME} | wc -l)
     case ${numaliases} in
-        0) echo "Alias ${dbalias} is not found. Please check the configuration section of the script."
+        0) echo "Alias ${dbalias} not found. Please check the configuration section of the script."
            retcode=1
            break
            ;;
